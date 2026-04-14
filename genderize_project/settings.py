@@ -54,12 +54,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'genderize_project.wsgi.application'
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600
-    )
-}
+# Database
+# Use DATABASE_URL if available (Render provides this), otherwise use individual settings
+if os.environ.get("DATABASE_URL"):
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=os.environ.get("DATABASE_URL"), conn_max_age=600
+        )
+    }
+else:
+    # Fallback to individual settings for local development
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "data_persistence_db"),
+            "USER": os.environ.get("DB_USER", "postgres"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
+    }
+
 
 CORS_ALLOW_ALL_ORIGINS = True
 
