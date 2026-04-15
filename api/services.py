@@ -3,6 +3,13 @@ import concurrent.futures
 from typing import Dict, Any
 from .exceptions import ExternalAPIException, InvalidProfileDataException
 
+API_DISPLAY_NAMES = {
+    "genderize": "Genderize",
+    "agify": "Agify",
+    "nationalize": "Nationalize",
+}
+
+
 class ProfileAggregatorService:
     @staticmethod
     def _get_age_group(age: int) -> str:
@@ -18,32 +25,33 @@ class ProfileAggregatorService:
             "agify": f"https://api.agify.io?name={name}",
             "nationalize": f"https://api.nationalize.io?name={name}"
         }
-        
+
         responses = {}
         with httpx.Client(timeout=10.0) as client:
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                future_to_url = {executor.submit(client.get, url): key for key, url in urls.items()}
-                for future in concurrent.futures.as_completed(future_to_url):
-                    key = future_to_url[future]
+                future_to_key = {executor.submit(client.get, url): key for key, url in urls.items()}
+                for future in concurrent.futures.as_completed(future_to_key):
+                    key = future_to_key[future]
+                    display_name = API_DISPLAY_NAMES[key]
                     try:
                         response = future.result()
                         response.raise_for_status()
                         responses[key] = response.json()
-                    except Exception as e:
-                        raise ExternalAPIException(f"Failed to fetch data from {key}: {str(e)}")
+                    except Exception:
+                        raise ExternalAPIException(f"{display_name} returned an invalid response")
 
         g_data = responses.get("genderize", {})
         a_data = responses.get("agify", {})
         n_data = responses.get("nationalize", {})
 
         if not g_data.get("gender") or g_data.get("count", 0) == 0:
-            raise InvalidProfileDataException("Unusable profile data: Genderize returned null or 0 count")
-            
+            raise InvalidProfileDataException("Genderize returned an invalid response")
+
         if a_data.get("age") is None:
-            raise InvalidProfileDataException("Unusable profile data: Agify returned null age")
-            
+            raise InvalidProfileDataException("Agify returned an invalid response")
+
         if not n_data.get("country"):
-            raise InvalidProfileDataException("Unusable profile data: Nationalize returned no country data")
+            raise InvalidProfileDataException("Nationalize returned an invalid response")
 
         top_country = max(n_data["country"], key=lambda c: c["probability"])
 
